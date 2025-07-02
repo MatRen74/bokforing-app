@@ -1,0 +1,13 @@
+# Konfiguration för Netlify
+[build]
+  # Sökväg till dina serverless-funktioner
+  functions = "netlify/functions"
+  # Mappen som ska publiceras (din rotmapp)
+  publish = "."
+
+# Konfiguration för den lokala utvecklingsservern (netlify dev)
+[dev]
+  # Ange att detta är ett statiskt projekt utan byggsteg
+  framework = "#static"
+  # Mappen som ska serveras lokalt (din rotmapp)
+  publish = "."
