@@ -6,15 +6,39 @@ interface ApiKeyManagerProps {
 }
 
 const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({ onKeyProvided }) => {
+  // Vite exposes env variables prefixed with VITE_ on import.meta.env
+  // For production, process.env.API_KEY would be used.
+  const apiKey = import.meta.env.VITE_API_KEY || process.env.API_KEY;
+
+  React.useEffect(() => {
+    if (apiKey) {
+      onKeyProvided();
+    }
+  }, [apiKey, onKeyProvided]);
+
   const handleSimulate = () => {
-    // In a real application, this would be handled server-side or via environment variables.
-    // Here, we simulate the presence of the key to unlock the UI.
-    // The key is NOT stored, it's just a flag to proceed.
-    Object.defineProperty(process.env, 'API_KEY', {
+    // Simulate the presence of the key to unlock the UI for local dev without a real key.
+    // This is a fallback if no VITE_API_KEY or process.env.API_KEY is found.
+    Object.defineProperty(import.meta.env, 'VITE_API_KEY', { // Simulate Vite's way
         value: 'SIMULATED_KEY_EXISTS',
-        writable: true
+        writable: true,
+        configurable: true
+    });
+    // Also simulate for process.env for broader compatibility if needed, though Vite uses import.meta.env
+     Object.defineProperty(process.env, 'API_KEY', {
+        value: 'SIMULATED_KEY_EXISTS',
+        writable: true,
+        configurable: true
     });
     onKeyProvided();
+  }
+
+  // If API key is already set (from env var), this component might not even be rendered
+  // or will quickly call onKeyProvided and lead to unmounting.
+  // The UI below is primarily for the simulation path.
+  if (apiKey) {
+    // Render nothing or a loading indicator if preferred, as onKeyProvided will be called.
+    return null;
   }
 
   return (

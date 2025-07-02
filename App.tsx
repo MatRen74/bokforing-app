@@ -21,7 +21,12 @@ type AppState =
   | 'fatalError';
 
 const App: React.FC = () => {
-  const [appState, setAppState] = useState<AppState>('awaitingApiKey');
+  // Check for API key presence initially to set the correct starting state.
+  // Vite exposes env variables prefixed with VITE_ on import.meta.env
+  const apiKeyIsPresent = !!(import.meta.env.VITE_API_KEY || process.env.API_KEY);
+  const initialAppState: AppState = apiKeyIsPresent ? 'idle' : 'awaitingApiKey';
+
+  const [appState, setAppState] = useState<AppState>(initialAppState);
   const [financialMetrics, setFinancialMetrics] = useState<FinancialMetrics | null>(null);
   const [fatalError, setFatalError] = useState<string>('');
   const [parsingErrorDetails, setParsingErrorDetails] = useState<{
