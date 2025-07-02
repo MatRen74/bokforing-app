@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { GoogleGenAI } from '@google/genai';
 import { SparklesIcon } from './icons/SparklesIcon';
 
 interface AiErrorAssistantProps {
@@ -20,15 +19,7 @@ const AiErrorAssistant: React.FC<AiErrorAssistantProps> = ({ problematicLine, er
       setIsGenerating(true);
       setAiError('');
 
-      if (!process.env.API_KEY) {
-        setAiError("API-nyckel för Gemini saknas. Kan inte anropa AI-assistenten.");
-        setIsGenerating(false);
-        return;
-      }
-      
       try {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-        
         const prompt = `Du är en expertanalytiker av SIE-filer. Ett parseringsfel inträffade. Din uppgift är att identifiera felet i den angivna raden och föreslå en korrigerad version. Användaren är en kompetent fackman, så ge en kortfattad, teknisk förklaring.
 
 **Problem:** En rad från en SIE-fil kunde inte tolkas.
@@ -48,22 +39,30 @@ Generera en JSON-utdata med följande struktur:
   "correctedLine": "ENDAST den fullständiga, korrigerade #TRANS-raden, utan extra text eller markdown."
 }`;
 
-        const response = await ai.models.generateContent({
-          model: "gemini-2.5-flash-preview-04-17",
-          contents: prompt,
-          config: {
-            responseMimeType: "application/json",
-          },
+        const response = await fetch('/api/gemini', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                message: prompt,
+                stream: false, // We want a single JSON response
+                config: {
+                    responseMimeType: "application/json",
+                }
+            })
         });
 
-        let jsonStr = response.text.trim();
-        const fenceRegex = /^```(\w*)?\s*\n?(.*?)\n?\s*```$/s;
-        const match = jsonStr.match(fenceRegex);
-        if (match && match[2]) {
-            jsonStr = match[2].trim();
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ details: 'Kunde inte läsa felmeddelande.'}));
+            throw new Error(`API-fel: ${response.status} ${response.statusText} - ${errorData.details}`);
         }
 
-        const parsedData = JSON.parse(jsonStr);
+        const parsedData = await response.json();
+        
+        if (parsedData.error) {
+             throw new Error(`AI-svar innehöll ett fel: ${parsedData.details}`);
+        }
 
         if (parsedData.analysis && parsedData.correctedLine) {
           setAiAnalysis(parsedData.analysis);
