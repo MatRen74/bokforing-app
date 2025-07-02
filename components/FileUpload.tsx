@@ -92,7 +92,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileProcessed }) => {
           onChange={handleFileSelect}
         />
       </div>
-       <p className="text-xs text-gray-600 mt-4 max-w-md mx-auto">Filen analyseras i din webbläsare. Vid syntaxfel eller logiska problem kan delar av innehållet skickas till en säker AI-tjänst för att ge förslag.</p>
+       <p className="text-xs text-gray-600 mt-4">All datahantering sker lokalt i din webbläsare. Din fil laddas aldrig upp någonstans.</p>
     </div>
   );
 };

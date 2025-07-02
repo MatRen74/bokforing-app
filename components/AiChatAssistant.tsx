@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
+import { GoogleGenAI, Chat } from '@google/genai';
 import { LogicalIssue } from '../types';
 import { SparklesIcon } from './icons/SparklesIcon';
 import { ShieldExclamationIcon } from './icons/ShieldExclamationIcon';
@@ -16,6 +17,7 @@ interface ChatMessage {
 }
 
 const AiChatAssistant: React.FC<AiChatAssistantProps> = ({ issues, onAccept, onReject }) => {
+    const [chat, setChat] = useState<Chat | null>(null);
     const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
     const [userInput, setUserInput] = useState('');
     const [isGenerating, setIsGenerating] = useState(true);
@@ -25,52 +27,72 @@ const AiChatAssistant: React.FC<AiChatAssistantProps> = ({ issues, onAccept, onR
     const scrollToBottom = () => {
         chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' });
     };
-    
-    // Abstracted fetch logic for reuse
-    const fetchStreamedResponse = async (history: ChatMessage[], newMessage: string) => {
+
+    useEffect(() => {
+        const initializeChat = async () => {
+            setIsGenerating(true);
+            setAiError('');
+
+            if (!process.env.API_KEY) {
+                setAiError("API-nyckel för Gemini saknas.");
+                setIsGenerating(false);
+                return;
+            }
+
+            try {
+                const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+                const newChat = ai.chats.create({
+                    model: 'gemini-2.5-flash-preview-04-17',
+                    config: {
+                      systemInstruction: "Du är en hjälpsam och kunnig bokföringsassistent. Du analyserar logiska fel i en SIE-fil. Presentera problemen tydligt för en kompetent användare. Förklara tekniska detaljer men undvik onödigt jargong. Bjud in till dialog och svara på användarens frågor. Var koncis."
+                    },
+                });
+                setChat(newChat);
+
+                const initialPrompt = `Här är en lista över logiska problem som hittades i en SIE-fil efter att den hade tolkats. Sammanfatta dessa problem, förklara kortfattat vad de innebär och bjud sedan in mig att ställa frågor om dem.\n\nProblem:\n${JSON.stringify(issues, null, 2)}`;
+
+                const initialBotMessage: ChatMessage = { role: 'model', text: '' };
+                setChatHistory([initialBotMessage]);
+                
+                const response = await newChat.sendMessageStream({ message: initialPrompt });
+
+                for await (const chunk of response) {
+                    initialBotMessage.text += chunk.text;
+                    setChatHistory(prev => [...prev.slice(0, -1), { ...initialBotMessage }]);
+                }
+
+            } catch (err) {
+                 const errorMsg = err instanceof Error ? err.message : 'Ett okänt fel inträffade.';
+                 setAiError(`Kunde inte starta chatt-assistenten. ${errorMsg}`);
+            } finally {
+                setIsGenerating(false);
+            }
+        };
+
+        initializeChat();
+    }, [issues]);
+
+    useEffect(scrollToBottom, [chatHistory]);
+
+    const handleSendMessage = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!userInput.trim() || !chat || isGenerating) return;
+
+        const text = userInput;
+        setUserInput('');
+        const userMessage: ChatMessage = { role: 'user', text };
+        const botMessage: ChatMessage = { role: 'model', text: '' };
+        setChatHistory(prev => [...prev, userMessage, botMessage]);
         setIsGenerating(true);
         setAiError('');
 
-        const userMessage: ChatMessage = { role: 'user', text: newMessage };
-        const botMessage: ChatMessage = { role: 'model', text: '' };
-        
-        let currentHistory = [...history];
-        if(newMessage) currentHistory.push(userMessage);
-
-        setChatHistory([...currentHistory, botMessage]);
-        
         try {
-            const systemInstruction = "Du är en hjälpsam och kunnig bokföringsassistent. Du analyserar logiska fel i en SIE-fil. Presentera problemen tydligt för en kompetent användare. Förklara tekniska detaljer men undvik onödigt jargong. Bjud in till dialog och svara på användarens frågor. Var koncis.";
-            
-            const response = await fetch('/api/gemini', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    stream: true,
-                    message: newMessage, // The message is now sent as part of the body
-                    history: history, // Send previous history
-                    systemInstruction,
-                })
-            });
-
-            if (!response.ok || !response.body) {
-                const errorText = await response.text();
-                throw new Error(`API-fel: ${response.status} ${response.statusText} - ${errorText}`);
+            const response = await chat.sendMessageStream({ message: text });
+            for await (const chunk of response) {
+                botMessage.text += chunk.text;
+                setChatHistory(prev => [...prev.slice(0, -1), { ...botMessage }]);
             }
-
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-            
-            while (true) {
-                const { value, done } = await reader.read();
-                if (done) break;
-                
-                botMessage.text += decoder.decode(value, { stream: true });
-                setChatHistory([...currentHistory, { ...botMessage }]);
-                scrollToBottom();
-            }
-
-        } catch (err) {
+        } catch(err) {
             const errorMsg = err instanceof Error ? err.message : 'Okänt fel.';
             setAiError(`Kunde inte få svar från AI:n. ${errorMsg}`);
             botMessage.text = `*Ett fel inträffade: ${errorMsg}*`;
@@ -78,24 +100,6 @@ const AiChatAssistant: React.FC<AiChatAssistantProps> = ({ issues, onAccept, onR
         } finally {
             setIsGenerating(false);
         }
-    };
-
-    useEffect(() => {
-        const initialPrompt = `Här är en lista över logiska problem som hittades i en SIE-fil efter att den hade tolkats. Sammanfatta dessa problem, förklara kortfattat vad de innebär och bjud sedan in mig att ställa frågor om dem.\n\nProblem:\n${JSON.stringify(issues, null, 2)}`;
-        fetchStreamedResponse([], initialPrompt);
-    }, [issues]);
-
-    useEffect(scrollToBottom, [chatHistory]);
-
-    const handleSendMessage = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!userInput.trim() || isGenerating) return;
-        
-        const text = userInput;
-        setUserInput('');
-        
-        // Pass the current valid history to the fetch function
-        fetchStreamedResponse(chatHistory, text);
     };
 
     return (
@@ -110,23 +114,19 @@ const AiChatAssistant: React.FC<AiChatAssistantProps> = ({ issues, onAccept, onR
             
             <div ref={chatContainerRef} className="flex-1 p-6 space-y-6 overflow-y-auto">
                 {chatHistory.map((msg, index) => (
-                    <div key={index} className={`flex items-start gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
+                    <div key={index} className={`flex items-start gap-3 ${msg.role === 'user' ? 'justify-end' : ''}`}>
                         {msg.role === 'model' && <div className="w-8 h-8 rounded-full bg-sky-500 flex items-center justify-center flex-shrink-0"><SparklesIcon className="w-5 h-5 text-white" /></div>}
                         <div className={`max-w-xl p-4 rounded-xl ${msg.role === 'model' ? 'bg-gray-700' : 'bg-sky-800'}`}>
                            <p className="whitespace-pre-wrap text-white">{msg.text}</p>
                         </div>
-                         {msg.role === 'user' && <div className="w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center font-bold text-gray-300 flex-shrink-0">DU</div>}
+                         {msg.role === 'user' && <div className="w-8 h-8 rounded-full bg-gray-600 flex-shrink-0"></div>}
                     </div>
                 ))}
                 {isGenerating && chatHistory.length > 0 && chatHistory[chatHistory.length -1].role === 'model' && (
                      <div className="flex items-start gap-3">
                         <div className="w-8 h-8 rounded-full bg-sky-500 flex items-center justify-center flex-shrink-0"><SparklesIcon className="w-5 h-5 text-white" /></div>
-                        <div className="max-w-xl p-4 rounded-xl bg-gray-700">
-                           <div className="flex items-center space-x-2">
-                              <div className="h-2 w-2 bg-gray-400 rounded-full animate-pulse [animation-delay:-0.3s]"></div>
-                              <div className="h-2 w-2 bg-gray-400 rounded-full animate-pulse [animation-delay:-0.15s]"></div>
-                              <div className="h-2 w-2 bg-gray-400 rounded-full animate-pulse"></div>
-                            </div>
+                        <div className="max-w-xl p-4 rounded-xl bg-gray-700 animate-pulse">
+                            <div className="h-2 bg-gray-500 rounded-full w-48"></div>
                         </div>
                     </div>
                 )}

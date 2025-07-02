@@ -7,9 +7,11 @@ import FileUpload from './components/FileUpload';
 import CompanyPulse from './components/CompanyPulse';
 import AiErrorAssistant from './components/AiErrorAssistant';
 import AiChatAssistant from './components/AiChatAssistant';
+import ApiKeyManager from './components/ApiKeyManager';
 import { ShieldExclamationIcon } from './components/icons/ShieldExclamationIcon';
 
 type AppState =
+  | 'awaitingApiKey'
   | 'idle'
   | 'parsing'
   | 'awaitingSyntaxFix'
@@ -19,9 +21,15 @@ type AppState =
   | 'fatalError';
 
 const App: React.FC = () => {
-  const [appState, setAppState] = useState<AppState>('idle');
+  // Check for API key presence initially to set the correct starting state.
+  // Vite exposes env variables prefixed with VITE_ on import.meta.env
+  const apiKeyIsPresent = !!(import.meta.env.VITE_API_KEY || process.env.API_KEY);
+  const initialAppState: AppState = apiKeyIsPresent ? 'idle' : 'awaitingApiKey';
+
+  const [appState, setAppState] = useState<AppState>(initialAppState);
   const [financialMetrics, setFinancialMetrics] = useState<FinancialMetrics | null>(null);
   const [fatalError, setFatalError] = useState<string>('');
+  // Test comment for Netlify build trigger
   const [parsingErrorDetails, setParsingErrorDetails] = useState<{
     problematicLine: string;
     originalFileContent: string;
@@ -73,6 +81,10 @@ const App: React.FC = () => {
     }, 100);
   }, []);
 
+  const handleApiKeyProvided = () => {
+    setAppState('idle');
+  };
+
   const handleReset = () => {
     setAppState('idle');
     setFinancialMetrics(null);
@@ -106,6 +118,8 @@ const App: React.FC = () => {
 
   const renderContent = () => {
     switch (appState) {
+      case 'awaitingApiKey':
+        return <ApiKeyManager onKeyProvided={handleApiKeyProvided} />;
       case 'parsing':
       case 'validatingLogic':
         return (
