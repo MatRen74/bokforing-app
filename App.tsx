@@ -29,6 +29,7 @@ const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>(initialAppState);
   const [financialMetrics, setFinancialMetrics] = useState<FinancialMetrics | null>(null);
   const [fatalError, setFatalError] = useState<string>('');
+  // Test comment for Netlify build trigger
   const [parsingErrorDetails, setParsingErrorDetails] = useState<{
     problematicLine: string;
     originalFileContent: string;
