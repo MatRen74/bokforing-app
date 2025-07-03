@@ -32,7 +32,7 @@ const AiChatAssistant: React.FC<AiChatAssistantProps> = ({ issues, onAccept, onR
         try {
             const apiKey = process.env.API_KEY;
             if (!apiKey) {
-                throw new Error("API key is not available. Ensure it is set in your environment via Vite's define or other means.");
+                throw new Error("API key is not available. Ensure it is set in your environment.");
             }
             const ai = new GoogleGenAI({ apiKey });
             const systemInstruction = "Du är en hjälpsam och kunnig bokföringsassistent. Du analyserar logiska fel i en SIE-fil. Presentera problemen tydligt för en kompetent användare. Förklara tekniska detaljer men undvik onödigt jargong. Bjud in till dialog och svara på användarens frågor. Var koncis.";
@@ -59,9 +59,9 @@ const AiChatAssistant: React.FC<AiChatAssistantProps> = ({ issues, onAccept, onR
             setAiError('');
 
             const initialPrompt = `Här är en lista över logiska problem som hittades i en SIE-fil efter att den hade tolkats. Sammanfatta dessa problem, förklara kortfattat vad de innebär och bjud sedan in mig att ställa frågor om dem.\n\nProblem:\n${JSON.stringify(issues, null, 2)}`;
-
+            
             setChatHistory([{ role: 'model', text: '' }]);
-
+            
             try {
                 const stream = await chat.sendMessageStream({ message: initialPrompt });
                 
@@ -93,19 +93,19 @@ const AiChatAssistant: React.FC<AiChatAssistantProps> = ({ issues, onAccept, onR
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!userInput.trim() || isGenerating || !chat) return;
-
+        
         const text = userInput;
         setUserInput('');
-
+        
         const userMessage: ChatMessage = { role: 'user', text };
         setChatHistory(prev => [...prev, userMessage, { role: 'model', text: '' }]);
-
+        
         setIsGenerating(true);
         setAiError('');
 
         try {
             const stream = await chat.sendMessageStream({ message: text });
-
+            
             let fullText = '';
             for await (const chunk of stream) {
                 fullText += chunk.text;

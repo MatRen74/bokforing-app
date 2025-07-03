@@ -23,7 +23,7 @@ const AiErrorAssistant: React.FC<AiErrorAssistantProps> = ({ problematicLine, er
       try {
         const apiKey = process.env.API_KEY;
         if (!apiKey) {
-            throw new Error("API key is not available. Ensure it is set in your environment via Vite's define or other means.");
+            throw new Error("API key is not available. Ensure it is set in your environment.");
         }
         const ai = new GoogleGenAI({ apiKey });
         const prompt = `Du är en expertanalytiker av SIE-filer. Ett parseringsfel inträffade. Din uppgift är att identifiera felet i den angivna raden och föreslå en korrigerad version. Användaren är en kompetent fackman, så ge en kortfattad, teknisk förklaring.
@@ -59,7 +59,7 @@ Generera en JSON-utdata med följande struktur:
         if (match && match[2]) {
           jsonStr = match[2].trim();
         }
-
+        
         const parsedData = JSON.parse(jsonStr);
 
         if (parsedData.analysis && parsedData.correctedLine) {
