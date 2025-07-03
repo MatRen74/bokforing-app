@@ -30,7 +30,11 @@ const AiChatAssistant: React.FC<AiChatAssistantProps> = ({ issues, onAccept, onR
     // Initialize chat session
     useEffect(() => {
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const apiKey = import.meta.env.VITE_API_KEY;
+            if (!apiKey) {
+                throw new Error("API key is not available. Ensure VITE_API_KEY is set in your environment.");
+            }
+            const ai = new GoogleGenAI({ apiKey });
             const systemInstruction = "Du är en hjälpsam och kunnig bokföringsassistent. Du analyserar logiska fel i en SIE-fil. Presentera problemen tydligt för en kompetent användare. Förklara tekniska detaljer men undvik onödigt jargong. Bjud in till dialog och svara på användarens frågor. Var koncis.";
             const chatSession = ai.chats.create({
                 model: 'gemini-2.5-flash-preview-04-17',

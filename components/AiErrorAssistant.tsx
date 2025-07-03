@@ -21,7 +21,11 @@ const AiErrorAssistant: React.FC<AiErrorAssistantProps> = ({ problematicLine, er
       setAiError('');
 
       try {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const apiKey = import.meta.env.VITE_API_KEY;
+        if (!apiKey) {
+            throw new Error("API key is not available. Ensure VITE_API_KEY is set in your environment.");
+        }
+        const ai = new GoogleGenAI({ apiKey });
         const prompt = `Du är en expertanalytiker av SIE-filer. Ett parseringsfel inträffade. Din uppgift är att identifiera felet i den angivna raden och föreslå en korrigerad version. Användaren är en kompetent fackman, så ge en kortfattad, teknisk förklaring.
 
 **Problem:** En rad från en SIE-fil kunde inte tolkas.
