@@ -1,4 +1,4 @@
-import { FinancialMetrics, SieAccount, BalanceSheetItem, TimelineEvent, SieParserResult, SieVoucher } from '../types';
+import { SieAccount, BalanceSheetItem, TimelineEvent, SieParserResult, SieVoucher } from '../types';
 
 export const parseSieFile = (fileContent: string): SieParserResult => {
  try {

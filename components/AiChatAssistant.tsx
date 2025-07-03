@@ -1,19 +1,18 @@
-
 import React, { useState, useEffect, useRef } from 'react';
-import { GoogleGenAI, Chat } from '@google/genai';
 import { LogicalIssue } from '../types';
 import { SparklesIcon } from './icons/SparklesIcon';
 import { ShieldExclamationIcon } from './icons/ShieldExclamationIcon';
-
-interface AiChatAssistantProps {
-  issues: LogicalIssue[];
-  onAccept: () => void;
-  onReject: () => void;
-}
+import { GoogleGenAI, Chat } from '@google/genai';
 
 interface ChatMessage {
     role: 'user' | 'model';
     text: string;
+}
+
+interface AiChatAssistantProps {
+    issues: LogicalIssue[];
+    onAccept: () => void;
+    onReject: () => void;
 }
 
 const AiChatAssistant: React.FC<AiChatAssistantProps> = ({ issues, onAccept, onReject }) => {
@@ -28,75 +27,105 @@ const AiChatAssistant: React.FC<AiChatAssistantProps> = ({ issues, onAccept, onR
         chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' });
     };
 
+    // Initialize chat session
     useEffect(() => {
-        const initializeChat = async () => {
+        try {
+            const apiKey = process.env.API_KEY;
+            if (!apiKey) {
+                throw new Error("API key is not available. Ensure it is set in your environment.");
+            }
+            const ai = new GoogleGenAI({ apiKey });
+            const systemInstruction = "Du är en hjälpsam och kunnig bokföringsassistent. Du analyserar logiska fel i en SIE-fil. Presentera problemen tydligt för en kompetent användare. Förklara tekniska detaljer men undvik onödigt jargong. Bjud in till dialog och svara på användarens frågor. Var koncis.";
+            const chatSession = ai.chats.create({
+                model: 'gemini-2.5-flash-preview-04-17',
+                config: {
+                    systemInstruction,
+                },
+            });
+            setChat(chatSession);
+        } catch(e) {
+            const errorMsg = e instanceof Error ? e.message : 'Okänt fel.';
+            setAiError(`Kunde inte initiera chatten. ${errorMsg}`);
+            setIsGenerating(false);
+        }
+    }, []);
+
+    // Send initial message when chat is ready
+    useEffect(() => {
+        if (!chat) return;
+
+        const sendInitialMessage = async () => {
             setIsGenerating(true);
             setAiError('');
 
-            if (!process.env.API_KEY) {
-                setAiError("API-nyckel för Gemini saknas.");
-                setIsGenerating(false);
-                return;
-            }
-
+            const initialPrompt = `Här är en lista över logiska problem som hittades i en SIE-fil efter att den hade tolkats. Sammanfatta dessa problem, förklara kortfattat vad de innebär och bjud sedan in mig att ställa frågor om dem.\n\nProblem:\n${JSON.stringify(issues, null, 2)}`;
+            
+            setChatHistory([{ role: 'model', text: '' }]);
+            
             try {
-                const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-                const newChat = ai.chats.create({
-                    model: 'gemini-2.5-flash-preview-04-17',
-                    config: {
-                      systemInstruction: "Du är en hjälpsam och kunnig bokföringsassistent. Du analyserar logiska fel i en SIE-fil. Presentera problemen tydligt för en kompetent användare. Förklara tekniska detaljer men undvik onödigt jargong. Bjud in till dialog och svara på användarens frågor. Var koncis."
-                    },
-                });
-                setChat(newChat);
-
-                const initialPrompt = `Här är en lista över logiska problem som hittades i en SIE-fil efter att den hade tolkats. Sammanfatta dessa problem, förklara kortfattat vad de innebär och bjud sedan in mig att ställa frågor om dem.\n\nProblem:\n${JSON.stringify(issues, null, 2)}`;
+                const stream = await chat.sendMessageStream({ message: initialPrompt });
                 
-                const initialBotMessage: ChatMessage = { role: 'model', text: '' };
-                setChatHistory([initialBotMessage]);
-                
-                const response = await newChat.sendMessageStream({ message: initialPrompt });
-
-                for await (const chunk of response) {
-                    initialBotMessage.text += chunk.text;
-                    setChatHistory(prev => [...prev.slice(0, -1), { ...initialBotMessage }]);
+                let fullText = '';
+                for await (const chunk of stream) {
+                    fullText += chunk.text;
+                    setChatHistory(prev => {
+                        const newHistory = [...prev];
+                        newHistory[newHistory.length - 1] = { role: 'model', text: fullText };
+                        return newHistory;
+                    });
+                    scrollToBottom();
                 }
-
             } catch (err) {
-                 const errorMsg = err instanceof Error ? err.message : 'Ett okänt fel inträffade.';
-                 setAiError(`Kunde inte starta chatt-assistenten. ${errorMsg}`);
+                const errorMsg = err instanceof Error ? err.message : 'Okänt fel.';
+                const errorText = `*Ett fel inträffade: ${errorMsg}*`;
+                setAiError(`Kunde inte få svar från AI:n. ${errorMsg}`);
+                setChatHistory([{ role: 'model', text: errorText }]);
             } finally {
                 setIsGenerating(false);
             }
         };
 
-        initializeChat();
-    }, [issues]);
+        sendInitialMessage();
+    }, [chat, issues]);
 
     useEffect(scrollToBottom, [chatHistory]);
 
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!userInput.trim() || !chat || isGenerating) return;
-
+        if (!userInput.trim() || isGenerating || !chat) return;
+        
         const text = userInput;
         setUserInput('');
+        
         const userMessage: ChatMessage = { role: 'user', text };
-        const botMessage: ChatMessage = { role: 'model', text: '' };
-        setChatHistory(prev => [...prev, userMessage, botMessage]);
+        setChatHistory(prev => [...prev, userMessage, { role: 'model', text: '' }]);
+        
         setIsGenerating(true);
         setAiError('');
 
         try {
-            const response = await chat.sendMessageStream({ message: text });
-            for await (const chunk of response) {
-                botMessage.text += chunk.text;
-                setChatHistory(prev => [...prev.slice(0, -1), { ...botMessage }]);
+            const stream = await chat.sendMessageStream({ message: text });
+            
+            let fullText = '';
+            for await (const chunk of stream) {
+                fullText += chunk.text;
+                setChatHistory(prev => {
+                    const newHistory = [...prev];
+                    newHistory[newHistory.length - 1] = { role: 'model', text: fullText };
+                    return newHistory;
+                });
+                scrollToBottom();
             }
-        } catch(err) {
+
+        } catch (err) {
             const errorMsg = err instanceof Error ? err.message : 'Okänt fel.';
+            const errorText = `*Ett fel inträffade: ${errorMsg}*`;
             setAiError(`Kunde inte få svar från AI:n. ${errorMsg}`);
-            botMessage.text = `*Ett fel inträffade: ${errorMsg}*`;
-            setChatHistory(prev => [...prev.slice(0, -1), { ...botMessage }]);
+            setChatHistory(prev => {
+                const newHistory = [...prev];
+                newHistory[newHistory.length - 1] = { role: 'model', text: errorText };
+                return newHistory;
+            });
         } finally {
             setIsGenerating(false);
         }
@@ -114,19 +143,23 @@ const AiChatAssistant: React.FC<AiChatAssistantProps> = ({ issues, onAccept, onR
             
             <div ref={chatContainerRef} className="flex-1 p-6 space-y-6 overflow-y-auto">
                 {chatHistory.map((msg, index) => (
-                    <div key={index} className={`flex items-start gap-3 ${msg.role === 'user' ? 'justify-end' : ''}`}>
+                    <div key={index} className={`flex items-start gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
                         {msg.role === 'model' && <div className="w-8 h-8 rounded-full bg-sky-500 flex items-center justify-center flex-shrink-0"><SparklesIcon className="w-5 h-5 text-white" /></div>}
                         <div className={`max-w-xl p-4 rounded-xl ${msg.role === 'model' ? 'bg-gray-700' : 'bg-sky-800'}`}>
                            <p className="whitespace-pre-wrap text-white">{msg.text}</p>
                         </div>
-                         {msg.role === 'user' && <div className="w-8 h-8 rounded-full bg-gray-600 flex-shrink-0"></div>}
+                         {msg.role === 'user' && <div className="w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center font-bold text-gray-300 flex-shrink-0">DU</div>}
                     </div>
                 ))}
                 {isGenerating && chatHistory.length > 0 && chatHistory[chatHistory.length -1].role === 'model' && (
                      <div className="flex items-start gap-3">
                         <div className="w-8 h-8 rounded-full bg-sky-500 flex items-center justify-center flex-shrink-0"><SparklesIcon className="w-5 h-5 text-white" /></div>
-                        <div className="max-w-xl p-4 rounded-xl bg-gray-700 animate-pulse">
-                            <div className="h-2 bg-gray-500 rounded-full w-48"></div>
+                        <div className="max-w-xl p-4 rounded-xl bg-gray-700">
+                           <div className="flex items-center space-x-2">
+                              <div className="h-2 w-2 bg-gray-400 rounded-full animate-pulse [animation-delay:-0.3s]"></div>
+                              <div className="h-2 w-2 bg-gray-400 rounded-full animate-pulse [animation-delay:-0.15s]"></div>
+                              <div className="h-2 w-2 bg-gray-400 rounded-full animate-pulse"></div>
+                            </div>
                         </div>
                     </div>
                 )}

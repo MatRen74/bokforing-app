@@ -1,0 +1,17 @@
+# Konfiguration för Netlify
+[build]
+  # Kommando för att bygga projektet för produktion
+  command = "npm run build"
+  # Sökväg till dina serverless-funktioner
+  functions = "netlify/functions"
+  # Mappen som ska publiceras efter bygget (Vite skapar denna)
+  publish = "dist"
+
+# Konfiguration för den lokala utvecklingsservern (netlify dev)
+[dev]
+  # Kommandot för att starta utvecklingsservern (Vite)
+  command = "vite"
+  # Porten som Vite-servern normalt körs på
+  targetPort = 5173
+  # Mappen som ska publiceras (Vite hanterar detta i minnet)
+  publish = "dist"
