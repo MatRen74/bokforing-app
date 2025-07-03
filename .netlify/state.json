@@ -1,0 +1,20 @@
+{
+	"geolocation": {
+		"data": {
+			"city": "Stockholm",
+			"country": {
+				"code": "SE",
+				"name": "Sweden"
+			},
+			"subdivision": {
+				"code": "AB",
+				"name": "Stockholm County"
+			},
+			"timezone": "Europe/Stockholm",
+			"latitude": 59.3326,
+			"longitude": 18.0651,
+			"postalCode": "109 15"
+		},
+		"timestamp": 1751493090402
+	}
+}
